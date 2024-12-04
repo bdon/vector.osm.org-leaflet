@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quick Start - Leaflet</title>
+  <link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/protomaps-leaflet@4.0.1/dist/protomaps-leaflet.js"></script> 
+  <script src="https://unpkg.com/leaflet-hash@0.2.1/leaflet-hash.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #map {
+      height: 400px;
+      width: 800px;
+    }
+    .leaflet-container {
+      background-color: #fff;
+    }
+  </style>
+</head>
+<body>
+<div class="main">
+  <h1>ultra minimal vector.osm.org + leaflet</h1>
+  <div id="map"></div>
+  <div class="controls">
+    <hr/>
+    <div>
+    choose a font: 
+      <select id="font">
+          <option value="monospace">monospace</option>
+          <option value="serif">serif</option>
+          <option value="sans-serif">sans-serif</option>
+      </select>
+    </div>
+    <div>
+      choose a language:
+      <select id="lang">
+        <option value="name">name (local)</option>
+        <option value="name_en">en</option>
+        <option value="name_de">de</option>
+      </select>
+    </div>
+  </div>
+  <div>
+    <ul>
+      <li>minutely vector tile endpoint: <a href="https://vector.osm.org">vector.osm.org/shortbread_v1/{z}/{x}/{y}.mvt</a></li>
+      <li>tile contents docs: <a href="https://shortbread-tiles.org/schema/1.0/">shortbread 1.0</a></li>
+      <li>source code: <a href="https://github.com/bdon/vector.osm.org-leaflet">github.com/bdon/vector.osm.org-leaflet</a></li>
+    </ul>
+  </div>
+</div>
+<script>
+  const map = L.map('map');
+  hash = new L.Hash(map);
+  if (!window.location.hash) map.setView([51.505, -0.09], 13)
+
+  const popup = L.popup();
+
+  const paintRules= [
+    {
+      dataLayer:"land",
+      symbolizer:new protomapsL.LineSymbolizer({
+          color: "#fafafa"
+      })
+    },
+    {
+      dataLayer:"water_polygons",
+      symbolizer:new protomapsL.PolygonSymbolizer({
+          fill: "#bcbcbc"
+      })
+    },
+    {
+      dataLayer:"ocean",
+      symbolizer:new protomapsL.PolygonSymbolizer({
+          fill: "#dcdcdc"
+      })
+    },
+    {
+      dataLayer:"streets",
+      symbolizer:new protomapsL.LineSymbolizer({
+          color: "#ebebeb"
+      })
+    },
+    {
+      dataLayer:"boundaries",
+      symbolizer:new protomapsL.LineSymbolizer({
+          color: "#adadad"
+      })
+    },
+    {
+      dataLayer:"buildings",
+      symbolizer:new protomapsL.PolygonSymbolizer({
+          fill: "#efefef"
+      })
+    }
+  ];
+
+  const labelRules = (font,lang) => {
+    return [
+      {
+        dataLayer:"place_labels",
+        symbolizer:new protomapsL.CenteredTextSymbolizer({
+            labelProps:[lang],
+            font: (z,f) => {
+                if (f.props.kind === 'capital') return "600 16px " + font
+                else if (f.props.kind === 'city') return "500 16px " + font
+                return "400 12px " + font
+            },
+            fill: "#5c5c5c"
+        })
+      },
+      {
+        dataLayer:"pois",
+        minzoom: 16,
+        symbolizer:new protomapsL.CenteredTextSymbolizer({
+            labelProps:[lang],
+            font: `400 10px ${font}`, 
+            fill: "#7a7a7a"
+        })
+      }
+    ];
+  }
+
+  let font = "monospace";
+  let lang = "name";
+
+  let layer = protomapsL.leafletLayer({
+      url:'https://vector.osm.org/shortbread_v1/{z}/{x}/{y}.mvt',
+      maxDataZoom: 14,
+      paintRules:paintRules,
+      labelRules:labelRules(font,lang),
+      tasks:[document.fonts.load("12px Work Sans")],
+      attribution: "<a href='https://openstreetmap.org/copyright'>© OpenStreetMap contributors</a>"
+  })
+  layer.addTo(map) 
+
+  function onMapClick(e) {
+    const wrapped = map.wrapLatLng(e.latlng);
+    const sourceToFeatures = layer.queryTileFeaturesDebug(wrapped.lng, wrapped.lat).get("");
+    console.log(sourceToFeatures);
+    const list = [...sourceToFeatures.values()];
+    console.log(list);
+    const content = list.map(f => `${f.layerName}>${f.feature.props.kind || ""}>${f.feature.props.name || ""}`).join("<br/>");
+    popup
+      .setLatLng(e.latlng)
+      .setContent(content)
+      .openOn(map);
+  }
+
+  const rerender = () => {
+    layer.labelRules = labelRules(font,lang);
+    layer.clearLayout();
+    layer.rerenderTiles();
+  }
+
+  document.getElementById("font").addEventListener('change', e => {
+      font = e.target.value
+      rerender();
+  })
+  document.getElementById("lang").addEventListener('change', e => {
+      lang = e.target.value
+      rerender();
+  })
+
+  map.on('click', onMapClick);
+</script>
+</body>
+</html>
